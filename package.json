@@ -1,0 +1,16 @@
+{
+  "name": "tamabotchi",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.126.0",
+    "zod": "^4.6.5"
+  }
+}
