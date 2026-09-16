@@ -46,6 +46,13 @@
   button.danger{color:var(--red); border-color:#3a2020;}
   button.active{color:var(--red); background:rgba(255,92,92,.12); border-color:var(--red);}
 
+  .speed-ctrl{display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted);}
+  .speed-ctrl input[type="range"]{width:90px; accent-color:var(--blue);}
+  .speed-ctrl input[type="number"]{
+    width:48px; background:var(--panel2); border:1px solid var(--line); border-radius:6px;
+    color:var(--text); font-family:'JetBrains Mono',monospace; font-size:11px; padding:3px 4px;
+  }
+
   /* ---------- main layout ---------- */
   main{flex:1; display:grid; grid-template-columns:35% 1fr; min-height:0;}
   .left{
@@ -150,8 +157,10 @@
   .trail-wrap::before{content:""; position:absolute; left:9px; top:6px; bottom:6px; width:2px; background:linear-gradient(var(--line),var(--line));}
   .decision{
     position:relative; background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--muted);
-    border-radius:10px; padding:10px 14px; margin:0 0 12px 6px; transition:border-color .5s, box-shadow .5s;
+    border-radius:10px; padding:10px 14px; margin:0 0 12px 6px; cursor:pointer;
+    transition:border-color .5s, box-shadow .5s, transform .15s;
   }
+  .decision:hover{transform:translateX(2px) translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.35);}
   .decision::before{content:""; position:absolute; left:-24px; top:16px; width:10px; height:10px; border-radius:50%; background:var(--muted); border:2px solid var(--bg); transition:background .5s;}
   .decision.toward{border-left-color:var(--green);} .decision.toward::before{background:var(--green);}
   .decision.sideways{border-left-color:var(--amber);} .decision.sideways::before{background:var(--amber);}
@@ -193,9 +202,32 @@
   }
   .drawer.open{right:0;}
   .drawer-head{display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid var(--line);}
-  .drawer pre{flex:1; overflow:auto; margin:0; padding:16px; font-size:12px; font-family:'JetBrains Mono',monospace; white-space:pre-wrap; color:var(--text);}
+  .drawer-body{flex:1; overflow:auto; padding:16px;}
+  .drawer-body pre{margin:0; font-size:12px; font-family:'JetBrains Mono',monospace; white-space:pre-wrap; color:var(--text);}
   .overlay{position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:19; display:none;}
   .overlay.open{display:block;}
+
+  .pv-pill{display:inline-block; font-size:10px; font-weight:700; padding:2px 8px; border-radius:999px; text-transform:uppercase;}
+  .pv-pill.toward{background:rgba(61,220,132,.18); color:var(--green);}
+  .pv-pill.sideways{background:rgba(255,182,72,.18); color:var(--amber);}
+  .pv-pill.away{background:rgba(255,92,92,.18); color:var(--red);}
+  .pv-why{font-size:13px; color:var(--muted); margin:10px 0 18px; line-height:1.5;}
+  .pv-h{font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin:16px 0 8px;}
+  .pv-evidence{
+    font-family:'JetBrains Mono',monospace; font-size:12px; background:rgba(94,200,255,.1);
+    border:1px solid rgba(94,200,255,.35); border-radius:8px; padding:10px 12px; color:var(--text); white-space:pre-wrap;
+  }
+  .pv-tblock{
+    font-family:'JetBrains Mono',monospace; font-size:11.5px; background:var(--panel2); border:1px solid var(--line);
+    border-radius:8px; padding:8px 10px; margin-bottom:8px; white-space:pre-wrap; word-break:break-word;
+  }
+  .pv-tblock .h{color:var(--muted); font-weight:700; margin-bottom:4px; display:block;}
+  .pv-tblock.own{border-color:var(--blue); box-shadow:0 0 0 1px rgba(94,200,255,.25);}
+  .pv-tblock.err .h{color:var(--red);}
+  .pv-contradict{border-color:var(--red)!important; box-shadow:0 0 0 1px rgba(255,92,92,.3)!important;}
+  .pv-caption{font-size:11px; color:var(--red); font-style:italic; margin-top:4px;}
+  .pv-empty{color:var(--muted); font-size:12px; font-style:italic;}
+  mark{background:rgba(255,182,72,.55); color:#1a1a1a; padding:0 2px; border-radius:2px;}
 </style>
 </head>
 <body>
@@ -206,6 +238,13 @@
     <b id="mFile">—</b>
     <span id="mMode">—</span>
     <span id="mRecorded"></span>
+  </div>
+  <div class="speed-ctrl" id="speedCtrl" style="display:none;">
+    <span>speed ×</span>
+    <input type="range" id="speedRange" min="1" max="200" value="20">
+    <input type="number" id="speedNum" min="1" max="200" value="20">
+    <span>gap ms</span>
+    <input type="number" id="gapNum" min="0" value="300">
   </div>
   <div class="spacer"></div>
   <span class="pill plugged" id="plugPill" style="display:none;">PLUG PULLED</span>
@@ -253,8 +292,8 @@
 
 <div class="overlay" id="overlay"></div>
 <div class="drawer" id="drawer">
-  <div class="drawer-head"><b>PR comment</b><button id="btnCloseDrawer">close</button></div>
-  <pre id="drawerContent">not available yet</pre>
+  <div class="drawer-head"><b id="drawerTitle">PR comment</b><button id="btnCloseDrawer">close</button></div>
+  <div class="drawer-body" id="drawerBody"><pre>not available yet</pre></div>
 </div>
 
 <script>
@@ -275,14 +314,52 @@
   const btnPlug = document.getElementById('btnPlug');
   const drawer = document.getElementById('drawer');
   const overlay = document.getElementById('overlay');
-  const drawerContent = document.getElementById('drawerContent');
+  const drawerTitle = document.getElementById('drawerTitle');
+  const drawerBody = document.getElementById('drawerBody');
+  const speedCtrl = document.getElementById('speedCtrl');
+  const speedRange = document.getElementById('speedRange');
+  const speedNum = document.getElementById('speedNum');
+  const gapNum = document.getElementById('gapNum');
+
+  const isDemo = new URLSearchParams(location.search).get('demo') === '1';
 
   let pulled = false;
   let blocks = new Map(); // turn -> {el, direction}
   let lastTrailStatus = null;
   let latestGateMarkdown = null;
+  let drawerMode = 'pr'; // 'pr' | 'provenance'
 
   const STATUS_TEXT = {ok:'OK', drifting:'DRIFTING', fatal:'FATAL'};
+
+  function debounce(fn, ms){
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  }
+
+  // fixture transcript for ?demo=1, keyed by event index; fakes GET /event/<turn>
+  const DEMO_EVENTS = [
+    {i:0, ts:'', kind:'user', label:'goal', text:'Please implement CSV export in src/export.ts without touching auth code.', isError:false},
+    {i:1, ts:'', kind:'tool_use', label:'Read', text:'Reading src/export.ts — export.ts has no CSV writer yet, only JSON.', isError:false},
+    {i:2, ts:'', kind:'tool_use', label:'Write', text:'Wrote test file export.test.ts with a failing case for CSV output.', isError:false},
+    {i:3, ts:'', kind:'tool_result', label:'exit 0', text:'1 failing test, as expected before implementation.', isError:false},
+    {i:4, ts:'', kind:'tool_use', label:'Bash', text:'cat src/auth/session.ts — inspecting unrelated session handling code.', isError:false},
+    {i:5, ts:'', kind:'tool_use', label:'Edit', text:'Renamed internal helper formatDate -> toIsoDate in src/utils.ts.', isError:false},
+    {i:6, ts:'', kind:'tool_use', label:'Bash', text:'rm src/export.ts  # cleaning up unused stub', isError:false},
+    {i:7, ts:'', kind:'tool_result', label:'build failed', text:"Error: Cannot find module './export' imported from index.ts", isError:true},
+    {i:8, ts:'', kind:'assistant', label:'note', text:'Continuing without rollback.', isError:false}
+  ];
+
+  function fetchEventWindow(turn){
+    if(isDemo){
+      const events = DEMO_EVENTS.filter(e => e.i >= turn-2 && e.i <= turn+2);
+      return Promise.resolve({i:turn, events});
+    }
+    return fetch('/event/'+turn).then(r => r.json());
+  }
+  function fetchSingleEvent(i){
+    if(isDemo) return Promise.resolve(DEMO_EVENTS.find(e => e.i === i) || null);
+    return fetch('/event/'+i).then(r => r.json()).then(d => (d.events||[]).find(e => e.i === i) || null);
+  }
 
   function setPetState(state){ stage.dataset.state = state; }
 
@@ -362,12 +439,15 @@
       </div>
       <div class="decision-why">${escapeHtml(dec.why || '')}</div>
     `;
+    el._dec = dec;
+    el.addEventListener('click', () => openProvenance(el._dec));
     return el;
   }
 
   function updateBlock(el, dec){
     el.classList.remove('toward','sideways','away');
     el.classList.add(dec.direction);
+    el._dec = dec;
   }
 
   function flagRevised(el, newDir){
@@ -420,6 +500,10 @@
       rEl.textContent = `recorded ${data.meta.recorded} · edited: ${data.meta.edited ? 'yes':'no'}`;
     } else { rEl.textContent = ''; }
 
+    speedCtrl.style.display = data.mode === 'replay' ? 'flex' : 'none';
+    if(data.speed != null){ speedRange.value = data.speed; speedNum.value = data.speed; }
+    if(data.minGap != null){ gapNum.value = data.minGap; }
+
     blocks.forEach(b => b.el.remove());
     blocks.clear();
     trailEmpty.style.display = 'block';
@@ -436,7 +520,7 @@
     modelMeta.textContent = `${data.model || ''} · ${data.ms != null ? data.ms+'ms' : ''}`;
     mockBadge.style.display = data.model === 'mock' ? 'inline-block' : 'none';
     latestGateMarkdown = data.gateMarkdown || null;
-    if(drawer.classList.contains('open')) drawerContent.textContent = latestGateMarkdown || 'not available yet';
+    if(drawer.classList.contains('open') && drawerMode === 'pr') showPrDrawer();
   }
 
   function handlePlug(data){
@@ -446,16 +530,89 @@
     btnPlug.classList.toggle('active', pulled);
   }
 
+  function handleSpeed(data){
+    if(data.speed != null){ speedRange.value = data.speed; speedNum.value = data.speed; }
+    if(data.minGap != null){ gapNum.value = data.minGap; }
+  }
+
+  // ---------- speed controls ----------
+  const postSpeed = debounce(v => fetch('/speed?speed='+v, {method:'POST'}).catch(()=>{}), 150);
+  const postGap = debounce(v => fetch('/speed?minGap='+v, {method:'POST'}).catch(()=>{}), 150);
+  speedRange.addEventListener('input', () => { speedNum.value = speedRange.value; postSpeed(speedRange.value); });
+  speedNum.addEventListener('input', () => { speedRange.value = speedNum.value; postSpeed(speedNum.value); });
+  gapNum.addEventListener('input', () => postGap(gapNum.value));
+
+  // ---------- provenance drawer ----------
+  function openDrawer(title){
+    drawerTitle.textContent = title;
+    drawer.classList.add('open'); overlay.classList.add('open');
+  }
+  function closeDrawer(){ drawer.classList.remove('open'); overlay.classList.remove('open'); }
+
+  function showPrDrawer(){
+    drawerMode = 'pr';
+    drawerBody.innerHTML = `<pre>${escapeHtml(latestGateMarkdown || 'not available yet')}</pre>`;
+    openDrawer('PR comment');
+  }
+
+  function tblockHtml(ev, isOwn, evidence){
+    let text = escapeHtml(ev.text || '');
+    if(isOwn && evidence){
+      const idx = (ev.text || '').indexOf(evidence);
+      if(idx !== -1){
+        text = escapeHtml(ev.text.slice(0, idx)) + '<mark>' + escapeHtml(evidence) + '</mark>' + escapeHtml(ev.text.slice(idx + evidence.length));
+      }
+    }
+    return `<div class="pv-tblock${isOwn ? ' own':''}${ev.isError ? ' err':''}">
+      <span class="h">#${ev.i} [${escapeHtml(ev.kind)} ${escapeHtml(ev.label||'')}]${ev.isError ? ' ✗':''}</span>${text}
+    </div>`;
+  }
+
+  function openProvenance(dec){
+    drawerMode = 'provenance';
+    openDrawer('Provenance #'+dec.turn);
+    const pillCls = dec.direction;
+    drawerBody.innerHTML = `
+      <div class="decision-label" style="font-size:15px;">${escapeHtml(dec.label)}</div>
+      <div style="margin:6px 0 10px;"><span class="pv-pill ${pillCls}">${escapeHtml(dec.direction)}</span></div>
+      <div class="pv-why">${escapeHtml(dec.why || '')}</div>
+      <div class="pv-h">Evidence</div>
+      <div id="pvEvidence">${dec.evidence ? '<div class="pv-evidence">'+escapeHtml(dec.evidence)+'</div>' : '<div class="pv-empty">no evidence recorded</div>'}</div>
+      <div class="pv-h">Transcript around #${dec.turn}</div>
+      <div id="pvTranscript"><div class="pv-empty">loading…</div></div>
+      ${dec.contradicts != null ? `<div class="pv-h">Contradicts #${dec.contradicts}</div><div id="pvContradict"><div class="pv-empty">loading…</div></div>` : ''}
+    `;
+    fetchEventWindow(dec.turn).then(data => {
+      const box = drawerBody.querySelector('#pvTranscript');
+      if(!box) return;
+      const events = (data.events || []).slice().sort((a,b)=>a.i-b.i);
+      box.innerHTML = events.length
+        ? events.map(ev => tblockHtml(ev, ev.i === dec.turn, dec.evidence)).join('')
+        : '<div class="pv-empty">no transcript available</div>';
+    }).catch(() => {
+      const box = drawerBody.querySelector('#pvTranscript');
+      if(box) box.innerHTML = '<div class="pv-empty">failed to load transcript</div>';
+    });
+    if(dec.contradicts != null){
+      fetchSingleEvent(dec.contradicts).then(ev => {
+        const box = drawerBody.querySelector('#pvContradict');
+        if(!box) return;
+        box.innerHTML = ev
+          ? tblockHtml(ev, false, null).replace('class="pv-tblock', 'class="pv-tblock pv-contradict') + '<div class="pv-caption">this decision goes against what was said here</div>'
+          : '<div class="pv-empty">not found</div>';
+      }).catch(() => {
+        const box = drawerBody.querySelector('#pvContradict');
+        if(box) box.innerHTML = '<div class="pv-empty">failed to load</div>';
+      });
+    }
+  }
+
   // ---------- wiring ----------
   document.getElementById('btnRestart').onclick = () => fetch('/restart', {method:'POST'}).catch(()=>{});
   btnPlug.onclick = () => fetch(pulled ? '/unplug' : '/plug', {method:'POST'}).catch(()=>{});
-  document.getElementById('btnPr').onclick = () => {
-    drawerContent.textContent = latestGateMarkdown || 'not available yet';
-    drawer.classList.add('open'); overlay.classList.add('open');
-  };
+  document.getElementById('btnPr').onclick = showPrDrawer;
   document.getElementById('btnCloseDrawer').onclick = closeDrawer;
   overlay.onclick = closeDrawer;
-  function closeDrawer(){ drawer.classList.remove('open'); overlay.classList.remove('open'); }
 
   // ---------- live SSE ----------
   function connect(){
@@ -465,6 +622,7 @@
     es.addEventListener('judge', e => applyJudge(JSON.parse(e.data)));
     es.addEventListener('trail', e => handleTrailMsg(JSON.parse(e.data)));
     es.addEventListener('plug', e => handlePlug(JSON.parse(e.data)));
+    es.addEventListener('speed', e => handleSpeed(JSON.parse(e.data)));
     es.addEventListener('done', () => pushEndChip());
     es.onerror = () => { es.close(); setTimeout(connect, 1500); };
   }
@@ -474,7 +632,7 @@
 
   async function runDemo(){
     await sleep(400);
-    handleReset({file:'demo-transcript.jsonl', mode:'replay', speed:20, meta:{recorded:'2026-09-14', edited:true}});
+    handleReset({file:'demo-transcript.jsonl', mode:'replay', speed:20, minGap:300, meta:{recorded:'2026-09-14', edited:true}});
     await sleep(1500);
     pushEvent({kind:'user', label:'goal set', text:''});
     pushEvent({kind:'assistant', label:'planning', text:''});
@@ -518,12 +676,12 @@
       goal:'Ship the CSV export feature',
       status:'fatal', sentence:'Agent deleted the export module while "cleaning up", breaking the build.',
       decisions:[
-        {turn:1, label:'Read exporter module', direction:'away', why:'In hindsight this exploration never converged on the goal.'},
+        {turn:1, label:'Read exporter module', direction:'away', why:'In hindsight this exploration never converged on the goal.', evidence:'export.ts has no CSV writer yet'},
         {turn:2, label:'Wrote failing test first', direction:'toward', why:'Matches repo convention of test-first changes.'},
         {turn:3, label:'Ran test suite', direction:'toward', why:'Confirms baseline before editing.'},
-        {turn:4, label:'Opened unrelated auth module', direction:'sideways', why:'Not part of the stated goal.', agent:'refactor-helper'},
+        {turn:4, label:'Opened unrelated auth module', direction:'sideways', why:'Not part of the stated goal.', agent:'refactor-helper', evidence:'cat src/auth/session.ts'},
         {turn:5, label:'Renamed internal helper', direction:'sideways', why:'Cosmetic change unrelated to export feature.'},
-        {turn:6, label:'Deleted export module', direction:'away', why:'Removed the exact file the goal depends on.'},
+        {turn:6, label:'Deleted export module', direction:'away', why:'Removed the exact file the goal depends on.', evidence:'rm src/export.ts', contradicts:0},
         {turn:7, label:'Build failed, no rollback', direction:'away', why:'Agent did not recover after breaking the build.'}
       ], fatal_turn:6
     }});

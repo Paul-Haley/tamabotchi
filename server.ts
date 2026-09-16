@@ -5,9 +5,9 @@ const args = Bun.argv.slice(2);
 const flag = (k: string, d?: string) => (args.includes(`--${k}`) ? args[args.indexOf(`--${k}`) + 1] : d);
 const replayFile = flag("replay");
 const watchFile = flag("watch");
-const speed = Number(flag("speed", "20"));
+let speed = Number(flag("speed", "20"));
 const N = Number(flag("n", "6"));
-const minGap = Number(flag("min-gap", "250"));
+let minGap = Number(flag("min-gap", "250"));
 const gate = !args.includes("--no-gate");
 const port = Number(flag("port", "8787"));
 const mock = args.includes("--mock") || !!process.env.MOCK_JUDGE;
@@ -44,7 +44,7 @@ function send(c: ReadableStreamDefaultController, name: string, data: any) {
 }
 const broadcast = (name: string, data: any) => clients.forEach((c) => send(c, name, data));
 const forUi = (e: Event) => ({ ...e, text: e.text.slice(0, 300) });
-const resetMsg = () => ({ file: file.split("/").pop(), mode: replayFile ? "replay" : "live", speed: replayFile ? speed : 1, meta });
+const resetMsg = () => ({ file: file.split("/").pop(), mode: replayFile ? "replay" : "live", speed: replayFile ? speed : 1, minGap, meta });
 
 function pushEvent(e: Event) {
   events.push(e);
@@ -175,6 +175,17 @@ Bun.serve({
     if (req.method === "POST" && url.pathname === "/restart") {
       if (replayFile) replay();
       return new Response("ok");
+    }
+    if (req.method === "POST" && url.pathname === "/speed") {
+      if (url.searchParams.has("speed")) speed = Math.max(1, Number(url.searchParams.get("speed")));
+      if (url.searchParams.has("minGap")) minGap = Math.max(0, Number(url.searchParams.get("minGap")));
+      broadcast("speed", { speed, minGap });
+      return new Response("ok");
+    }
+    const m = url.pathname.match(/^\/event\/(\d+)$/);
+    if (m) {
+      const i = Number(m[1]);
+      return Response.json({ i, events: events.slice(Math.max(0, i - 2), i + 3) });
     }
     if (url.pathname === "/gate.md") return new Response(lastTrail?.gateMarkdown ?? "not available yet", { headers: { "Content-Type": "text/markdown" } });
     return new Response("not found", { status: 404 });

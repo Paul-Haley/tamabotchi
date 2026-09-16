@@ -22,6 +22,8 @@ export const TrailSchema = z.object({
       label: z.string(),
       direction: z.enum(["toward", "sideways", "away"]),
       why: z.string(),
+      evidence: z.string(),
+      contradicts: z.number().int().nullable(),
       agent: z.string().nullable(),
     }),
   ),
@@ -136,6 +138,8 @@ export function mockTrail(events: Event[]): Trail {
     label: `Ran ${e.label}`,
     direction: (k === arr.length - 1 && n > 40 ? "away" : k > arr.length * 0.6 && n > 20 ? "sideways" : "toward") as "toward" | "sideways" | "away",
     why: "mock verdict, no API key",
+    evidence: e.text.slice(0, 80),
+    contradicts: k === arr.length - 1 && n > 40 ? 0 : null,
     agent: e.agent ?? null,
   }));
   const status = n > 40 ? "fatal" : n > 20 ? "drifting" : "ok";
